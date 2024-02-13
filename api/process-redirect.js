@@ -1,5 +1,3 @@
-// api/process-redirect.js
-
 const axios = require('axios');
 const puppeteer = require('puppeteer');
 
@@ -31,7 +29,7 @@ export default async function handler(req, res) {
   let finalUrl, captureMethod;
 
   try {
-    const response = await axios.get(preRedirectUrl, { maxRedirects: 0 });
+    const response = await axios.get(preRedirectUrl, { maxRedirects: 5 });
     console.log('Final destination:');
     console.log('200', response.request.res.responseUrl);
     finalUrl = response.request.res.responseUrl;
