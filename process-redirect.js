@@ -10,14 +10,13 @@ async function getFinalDestination(url) {
   try {
     const browser = await puppeteer.launch({
       args: [
-        "--diable-setuid-sandbox",
+        "--disable-setuid-sandbox", // Fixed typo here
         "--no-sandbox",
         "--single-process",
         "--no-zygote",
       ],
       executablePath: process.env.NODE_ENV === 'production' ? process.env.PUPPETEER_EXECUTABLE_PATH : puppeteer.executablePath(),
-    }
-    );
+    });
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle0' });
     const finalDestination = page.url();
@@ -35,10 +34,16 @@ async function captureRedirect(initialUrl) {
 
   try {
     const response = await axios.get(initialUrl, { maxRedirects: 0 });
-    console.log('Final destination:');
-    console.log('200', response.request.res.responseUrl);
-    finalUrl = response.request.res.responseUrl;
-    captureMethod = 'axios';
+    if (response.status === 307) {
+      // If it's a temporary redirect, follow it
+      finalUrl = response.headers.location;
+      captureMethod = 'axios';
+    } else {
+      console.log('Final destination:');
+      console.log(`${response.status}`, response.request.res.responseUrl);
+      finalUrl = response.request.res.responseUrl;
+      captureMethod = 'axios';
+    }
   } catch (error) {
     if (error.response && error.response.status === 302) {
       console.log('Request was redirected');
@@ -63,7 +68,6 @@ async function captureRedirect(initialUrl) {
 
   return { finalUrl, captureMethod };
 }
-
 
 app.post('/process-redirect', (req, res) => {
   const preRedirectUrl = req.body.preRedirectUrl;
