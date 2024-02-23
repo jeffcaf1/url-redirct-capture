@@ -1,25 +1,12 @@
 const express = require('express');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
-const dotenv = require('dotenv');
-const { v4: uuidv4 } = require('uuid');
-
-dotenv.config();
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 
-function logRequest(req) {
-  const timestamp = new Date().toISOString();
-  const requestId = uuidv4();
-  const { method, url, body, headers } = req;
-  console.log(`${timestamp} [${requestId}] Incoming Request: ${method} ${url}`);
-  console.log(`${timestamp} [${requestId}] Request Headers:`, headers);
-  console.log(`${timestamp} [${requestId}] Request Body:`, body);
-  return requestId;
-}
-
-async function getFinalDestination(url, requestId) {
+async function getFinalDestination(url) {
   try {
     const browser = await puppeteer.launch({
       args: [
@@ -34,43 +21,46 @@ async function getFinalDestination(url, requestId) {
     await page.goto(url, { waitUntil: 'networkidle0' });
     const finalDestination = page.url();
     await browser.close();
-    console.log(`${new Date().toISOString()} [${requestId}] Puppeteer - Final destination: ${finalDestination}`);
     return finalDestination;
   } catch (error) {
-    console.error(`${new Date().toISOString()} [${requestId}] Puppeteer - Error occurred:`, error.message);
+    console.error(`Error occurred in getFinalDestination for URL ${url}:`, error.message);
     return null;
   }
 }
 
-async function captureRedirect(initialUrl, requestId) {
+async function captureRedirect(initialUrl) {
   let finalUrl = initialUrl;
   let captureMethod = '';
 
   try {
     const response = await axios.get(initialUrl, { maxRedirects: 0 });
     if (response.status === 307) {
+      // If it's a temporary redirect, follow it
       finalUrl = response.headers.location;
       captureMethod = 'axios';
     } else {
-      console.log(`${new Date().toISOString()} [${requestId}] Axios - Final destination: ${response.request.res.responseUrl}`);
+      console.log('Final destination:');
+      console.log(`${response.status}`, response.request.res.responseUrl);
       finalUrl = response.request.res.responseUrl;
       captureMethod = 'axios';
     }
   } catch (error) {
     if (error.response && error.response.status === 302) {
+      console.log('Request was redirected');
       finalUrl = error.response.headers.location;
-      console.log(`${new Date().toISOString()} [${requestId}] Axios - Final destination: ${finalUrl}`);
+      console.log('Final destination:');
+      console.log('302', finalUrl);
       captureMethod = 'axios';
     } else {
-      console.error(`${new Date().toISOString()} [${requestId}] Axios - An error occurred:`, error.message);
-      console.log(`${new Date().toISOString()} [${requestId}] Trying Puppeteer to capture final destination...`);
-      const finalDestination = await getFinalDestination(initialUrl, requestId);
+      console.error(`An error occurred in captureRedirect for URL ${initialUrl}:`, error.message);
+      console.log('Trying Puppeteer to capture final destination...');
+      const finalDestination = await getFinalDestination(initialUrl);
       if (finalDestination) {
-        console.log(`${new Date().toISOString()} [${requestId}] Puppeteer - Final destination: ${finalDestination}`);
+        console.log('Final destination (Puppeteer):', finalDestination);
         finalUrl = finalDestination;
         captureMethod = 'puppeteer';
       } else {
-        console.error(`${new Date().toISOString()} [${requestId}] Puppeteer - Failed to retrieve final destination.`);
+        console.error(`Failed to retrieve final destination for URL ${initialUrl}.`);
         return null;
       }
     }
@@ -81,28 +71,28 @@ async function captureRedirect(initialUrl, requestId) {
 
 app.post('/process-redirect', (req, res) => {
   const preRedirectUrl = req.body.preRedirectUrl;
-  const requestId = logRequest(req);
 
   if (!preRedirectUrl) {
     res.status(400).send('Missing preRedirectUrl parameter');
     return;
   }
 
-  captureRedirect(preRedirectUrl, requestId)
+  captureRedirect(preRedirectUrl)
     .then((finalUrl) => {
       if (finalUrl) {
-        res.status(200).json({ finalUrl: finalUrl.finalUrl, message: 'Redirect processing completed' });
+        res.status(200).json({ finalUrl, message: 'Redirect processing completed' });
       } else {
         res.status(500).json({ message: 'Redirect processing failed' });
       }
     })
     .catch((error) => {
-      console.error(`${new Date().toISOString()} [${requestId}] Error occurred during redirect processing:`, error);
+      console.error("Error occurred during redirect processing:", error);
       res.status(500).json({ message: 'Redirect processing failed' });
     });
 });
 
 const server = app.listen(3000, () => {
+  console.log('Server started at', new Date());
   console.log('Server listening on port 3000');
 });
 
