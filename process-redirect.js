@@ -1,13 +1,23 @@
 const express = require('express');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
+require("dotenv").config();
 
 const app = express();
 app.use(express.json());
 
 async function getFinalDestination(url) {
   try {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      args: [
+        "--diable-setuid-sandbox",
+        "--no-sandbox",
+        "--single-process",
+        "--no-zygote",
+      ],
+      executablePath: process.env.NODE_ENV === 'production' ? process.env.PUPPETEER_EXECUTABLE_PATH : puppeteer.executablePath(),
+    }
+    );
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'networkidle0' });
     const finalDestination = page.url();
