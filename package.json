@@ -2,8 +2,10 @@
   "name": "url-redirct-capture",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "process-redirect.js",
   "scripts": {
+    "start": "node process-redirect.js",
+    "build": "echo 'No build step required'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
